@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mini Twitter</title>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.7.0/dist/web3.min.js"></script>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <h1>Mini Twitter</h1>
+    <div id="walletButtons">
+      <button id="connectButton" onclick="connectWallet()">Se connecter au Wallet</button>
+      <button id="disconnectButton" onclick="disconnectWallet()" style="display: none;">Se déconnecter</button>
+    </div>
+    <div id="postArea" style="display: none;">
+      <textarea id="newPostContent" placeholder="Quoi de neuf?"></textarea>
+      <button onclick="publishPost()">Publier</button>
+    </div>
+    <div id="feed">
+      <!-- Posts will be dynamically loaded here -->
+    </div>
+
+    <script>
+      let web3;
+      let contract;
+      const contractAddress = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
+      const abi = [
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "postId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "disliker",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "newDislikeCount",
+				"type": "uint256"
+			}
+		],
+		"name": "PostDisliked",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "postId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "liker",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "newLikeCount",
+				"type": "uint256"
+			}
+		],
+		"name": "PostLiked",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "postId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "newMessage",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "lastModified",
+				"type": "uint256"
+			}
+		],
+		"name": "PostModified",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "postId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "author",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "message",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			}
+		],
+		"name": "PostPublished",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "postId",
+				"type": "uint256"
+			}
+		],
+		"name": "dislikePost",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "disliked",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "postId",
+				"type": "uint256"
+			}
+		],
+		"name": "getPost",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			},
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getTotalPosts",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "postId",
+				"type": "uint256"
+			}
+		],
+		"name": "likePost",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "liked",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "postId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "newMessage",
+				"type": "string"
+			}
+		],
+		"name": "modifyPost",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "posts",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "message",
+				"type": "string"
+			},
+			{
+				"internalType": "address",
+				"name": "author",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "likes",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "dislikes",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "lastModified",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_message",
+				"type": "string"
+			}
+		],
+		"name": "publishPost",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	}
+];
+
+      async function connectWallet() {
+        if (window.ethereum) {
+          try {
+            web3 = new Web3(window.ethereum);
+            await window.ethereum.enable();
+            contract = new web3.eth.Contract(abi, contractAddress);
+            
+            // Mettre à jour l'interface après connexion
+            document.getElementById('connectButton').style.display = 'none';
+            document.getElementById('disconnectButton').style.display = 'block';
+            document.getElementById('postArea').style.display = 'block';
+            
+            loadPosts();
+
+            // Écouter les changements de compte
+            window.ethereum.on('accountsChanged', function (accounts) {
+              if (accounts.length === 0) {
+                disconnectWallet();
+              } else {
+                loadPosts();
+              }
+            });
+          } catch (error) {
+            console.error("Erreur de connexion:", error);
+            alert("Erreur lors de la connexion au wallet!");
+          }
+        } else {
+          alert("MetaMask non détecté. Veuillez installer MetaMask!");
+        }
+      }
+
+      function disconnectWallet() {
+        web3 = null;
+        contract = null;
+        
+        // Réinitialiser l'interface
+        document.getElementById('connectButton').style.display = 'block';
+        document.getElementById('disconnectButton').style.display = 'none';
+        document.getElementById('postArea').style.display = 'none';
+        document.getElementById('feed').innerHTML = '';
+      }
+
+      async function loadPosts() {
+        if (!contract) return;
+        
+        const totalPosts = await contract.methods.getTotalPosts().call();
+        const feed = document.getElementById("feed");
+        feed.innerHTML = "";
+
+        for (let i = totalPosts - 1; i >= 0; i--) {
+          const post = await contract.methods.getPost(i).call();
+          feed.innerHTML += `
+            <div class="post">
+              <p>${post[0]}</p>
+              <small>Par: ${post[1]}</small>
+              <small>Likes: ${post[2]}, Dislikes: ${post[3]}</small>
+              <small>Date: ${new Date(post[4] * 1000).toLocaleString()}</small>
+              <button onclick="likePost(${i})">👍</button>
+              <button onclick="dislikePost(${i})">👎</button>
+              ${
+                post[1].toLowerCase() === ethereum.selectedAddress.toLowerCase()
+                  ? `<button onclick="modifyPost(${i})">Modifier</button>`
+                  : ""
+              }
+            </div>
+          `;
+        }
+      }
+
+      async function publishPost() {
+        if (!contract) return;
+        
+        const message = document.getElementById("newPostContent").value;
+        const accounts = await web3.eth.getAccounts();
+        await contract.methods.publishPost(message).send({ from: accounts[0] });
+        loadPosts();
+      }
+
+      async function likePost(postId) {
+        if (!contract) return;
+        
+        const accounts = await web3.eth.getAccounts();
+        await contract.methods.likePost(postId).send({ from: accounts[0] });
+        loadPosts();
+      }
+
+      async function dislikePost(postId) {
+        if (!contract) return;
+        
+        const accounts = await web3.eth.getAccounts();
+        await contract.methods.dislikePost(postId).send({ from: accounts[0] });
+        loadPosts();
+      }
+
+      async function modifyPost(postId) {
+        if (!contract) return;
+        
+        const newMessage = prompt("Entrez le nouveau message:");
+        if (newMessage) {
+          const accounts = await web3.eth.getAccounts();
+          await contract.methods
+            .modifyPost(postId, newMessage)
+            .send({ from: accounts[0] });
+          loadPosts();
+        }
+      }
+    </script>
+  </body>
+</html>
